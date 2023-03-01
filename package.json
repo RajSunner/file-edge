@@ -24,6 +24,7 @@
     "clsx": "^1.2.1",
     "eslint": "8.32.0",
     "eslint-config-next": "13.1.2",
+    "eventsource-parser": "^0.1.0",
     "formidable": "^2.1.1",
     "lodash": "^4.17.21",
     "mammoth": "^1.5.1",

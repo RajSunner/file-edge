@@ -1,40 +1,33 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+import { OpenAIStream, OpenAIStreamPayload } from "utils/OpenAIStream";
 
-import { completionStream } from "../../services/openai";
 import { FileChunk } from "../../types/file";
 
-type Data = {
-  answer?: string;
-  error?: string;
+export const config = {
+  runtime: "experimental-edge",
 };
 
 const MAX_FILES_LENGTH = 2000 * 3;
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<Data>
-) {
+const handler = async (req: Request): Promise<Response> => {
   // Only accept POST requests
+
+  const { fileChunks , question  } = (await req.json()) as {
+    fileChunks?: FileChunk[];
+    question?: string;
+
+  };
+
   if (req.method !== "POST") {
-    res.status(405).json({ error: "Method not allowed" });
-    return;
+    return new Response("Method not allowed", { status: 405 });
   }
 
-  const fileChunks = req.body.fileChunks as FileChunk[];
-
-  const question = req.body.question as string;
-
   if (!Array.isArray(fileChunks)) {
-    res.status(400).json({ error: "fileChunks must be an array" });
-    return;
+    return new Response("fileChunks must be an array", { status: 400 });
   }
 
   if (!question) {
-    res.status(400).json({ error: "question must be a string" });
-    return;
+    return new Response("question must be a string", { status: 400 });
   }
-
-  try {
     const filesString = fileChunks
       .map((fileChunk) => `###\n\"${fileChunk.filename}\"\n${fileChunk.text}`)
       .join("\n")
@@ -51,27 +44,21 @@ export default async function handler(
       `Files:\n${filesString}\n\n` +
       `Answer:`;
 
-    const stream = completionStream({
-      prompt,
+    const payload: OpenAIStreamPayload = {
       model: "text-davinci-003",
-    });
+      prompt,
+      temperature: 0.7,
+      top_p: 1,
+      frequency_penalty: 0,
+      presence_penalty: 0,
+      max_tokens: 200,
+      stream: true,
+      n: 1,
+    };
+  
+    const stream = await OpenAIStream(payload);
+    return new Response(stream);
 
-    // Set the response headers for streaming
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-    });
-
-    // Write the data from the stream to the response
-    for await (const data of stream) {
-      res.write(data);
-    }
-
-    // End the response when the stream is done
-    res.end();
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Something went wrong" });
-  }
 }
+  
+ export default handler
